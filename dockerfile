@@ -29,6 +29,6 @@ RUN chown -R robot:robot /app && \
 
 USER robot
 
-EXPOSE 8080
+EXPOSE 80
 
 CMD ["/usr/local/bin/lanparty-fileserver"]
