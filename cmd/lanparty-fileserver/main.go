@@ -17,11 +17,12 @@ import (
 )
 
 const (
+	// Here are some dynamic variables for Port & directory mapping, among other things.
 	templatesGlobPath = "templates/*.html"
 	preloadedDir      = "./preloaded-games"
 	uploadsDir        = "./uploads"
 	downloadsLogDir   = "./downloads-log"
-	port              = "8080"
+	port              = "80"
 )
 
 type DownloadInfo struct {
@@ -71,6 +72,7 @@ func main() {
 		}
 	}
 
+	// preLoadGames feature for loading files to share so that things are on there before the event starts.
 	preloadGames()
 
 	http.HandleFunc("/upload", uploadHandler)
@@ -171,13 +173,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, fullPath)
 }
 
-// listFiles now only takes http.ResponseWriter as 'r' was unused.
-func listFiles(w http.ResponseWriter) { // Removed 'r *http.Request'
+func listFiles(w http.ResponseWriter) {
 	dirEntries, err := os.ReadDir(uploadsDir)
 	if err != nil {
 		log.Printf("Error reading uploads directory %s: %v", uploadsDir, err)
-		// Note: 'r' is not available here for http.NotFound(w,r) or similar.
-		// http.Error is fine as it doesn't require 'r'.
 		http.Error(w, "Could not list files due to server error reading directory.", http.StatusInternalServerError)
 		return
 	}
