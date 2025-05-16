@@ -1,0 +1,13 @@
+services:
+  lanparty-fileserver:
+    image: ghcr.io/r2unit/lanparty-fileserver:dev-0.1.0
+    container_name: lan-fileserver
+
+    ports:
+      - "8080:8080"
+
+    volumes:
+      - ./preloaded-games:/app/preloaded-games:ro
+      - ./data/uploads:/app/uploads
+      - ./data/downloads-log:/app/downloads-log
+    restart: unless-stopped
