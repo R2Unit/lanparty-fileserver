@@ -22,9 +22,9 @@ const (
 	preloadedDir           = "./preloaded-games"
 	uploadsDir             = "./uploads"
 	downloadsLogDir        = "./downloads-log"
-	port                   = "8080"
-	defaultMaxUploadSizeMB = 100                  // Default max upload size in Megabytes
-	envMaxUploadSizeMB     = "MAX_UPLOAD_SIZE_MB" // Environment variable name
+	port                   = "80"
+	defaultMaxUploadSizeMB = 100
+	envMaxUploadSizeMB     = "MAX_UPLOAD_SIZE_MB"
 )
 
 // effectiveMaxUploadSizeBytes will store the actual max upload size to be used, in bytes.
