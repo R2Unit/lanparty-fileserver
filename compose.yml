@@ -2,12 +2,14 @@ services:
   lanparty-fileserver:
     image: ghcr.io/r2unit/lanparty-fileserver:dev-0.1.0
     container_name: lan-fileserver
-
+    restart: unless-stopped 
     ports:
-      - "8080:8080"
+      - "80:80"
+    environment:
+        # Adjust the upload size to your desired size. This is so no one will upload their entire media collection :p
+      - MAX_UPLOAD_SIZE_MB=250 
 
     volumes:
       - ./preloaded-games:/app/preloaded-games:ro
       - ./data/uploads:/app/uploads
       - ./data/downloads-log:/app/downloads-log
-    restart: unless-stopped

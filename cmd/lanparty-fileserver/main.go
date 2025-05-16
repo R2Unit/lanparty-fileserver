@@ -12,18 +12,23 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	// Here are some dynamic variables for Port & directory mapping, among other things.
-	templatesGlobPath = "templates/*.html"
-	preloadedDir      = "./preloaded-games"
-	uploadsDir        = "./uploads"
-	downloadsLogDir   = "./downloads-log"
-	port              = "80"
+	templatesGlobPath      = "templates/*.html"
+	preloadedDir           = "./preloaded-games"
+	uploadsDir             = "./uploads"
+	downloadsLogDir        = "./downloads-log"
+	port                   = "8080"
+	defaultMaxUploadSizeMB = 100                  // Default max upload size in Megabytes
+	envMaxUploadSizeMB     = "MAX_UPLOAD_SIZE_MB" // Environment variable name
 )
+
+// effectiveMaxUploadSizeBytes will store the actual max upload size to be used, in bytes.
+var effectiveMaxUploadSizeBytes int64
 
 type DownloadInfo struct {
 	Timestamp    time.Time `json:"timestamp"`
@@ -66,13 +71,26 @@ func main() {
 	}
 	templates = template.Must(template.New("").Funcs(funcMap).ParseGlob(templatesGlobPath))
 
+	maxUploadSizeMBStr := os.Getenv(envMaxUploadSizeMB)
+	maxUploadSizeMB := defaultMaxUploadSizeMB
+	if maxUploadSizeMBStr != "" {
+		parsedMB, errConv := strconv.Atoi(maxUploadSizeMBStr)
+		if errConv == nil && parsedMB > 0 {
+			maxUploadSizeMB = parsedMB
+			log.Printf("Using custom max upload size from %s: %d MB", envMaxUploadSizeMB, maxUploadSizeMB)
+		} else {
+			log.Printf("Warning: Invalid value for %s ('%s'). Using default: %d MB. Error: %v", envMaxUploadSizeMB, maxUploadSizeMBStr, defaultMaxUploadSizeMB, errConv)
+		}
+	} else {
+		log.Printf("Using default max upload size: %d MB. Set %s to override.", defaultMaxUploadSizeMB, envMaxUploadSizeMB)
+	}
+	effectiveMaxUploadSizeBytes = int64(maxUploadSizeMB) << 20
 	for _, dir := range []string{preloadedDir, uploadsDir, downloadsLogDir} {
 		if err = os.MkdirAll(dir, 0755); err != nil {
 			log.Fatalf("Error creating directory %s: %v", dir, err)
 		}
 	}
 
-	// preLoadGames feature for loading files to share so that things are on there before the event starts.
 	preloadGames()
 
 	http.HandleFunc("/upload", uploadHandler)
@@ -91,6 +109,7 @@ func main() {
 	log.Println("                                               ")
 	log.Println("--- WARNING: File deletion is ENABLED without authentication! ---")
 	log.Printf("Current date: %s", time.Now().Format(time.RFC1123))
+	log.Printf("Maximum upload file size configured to: %d MB (%d bytes)", maxUploadSizeMB, effectiveMaxUploadSizeBytes)
 	log.Printf("Access files by going to http://example:%s/", port)
 	log.Printf("Access files by going to http://example:%s/upload", port)
 	log.Println("--- Happy gaming away at the LAN party! 🎮 ---")
@@ -117,19 +136,19 @@ func preloadGames() {
 				log.Printf("Error opening preloaded file %s: %v", srcPath, errOpen)
 				continue
 			}
-			deferClose := func(f *os.File, path string) {
+			deferFunc := func(f *os.File, path string) {
 				if errClose := f.Close(); errClose != nil {
-					log.Printf("Error closing file %s: %v", path, errClose)
+					log.Printf("Error closing file %s (in defer): %v", path, errClose)
 				}
 			}
-			defer deferClose(srcFile, srcPath)
+			defer deferFunc(srcFile, srcPath)
 
 			dstFile, errCreate := os.Create(dstPath)
 			if errCreate != nil {
 				log.Printf("Error creating destination file %s for preloading: %v", dstPath, errCreate)
 				continue
 			}
-			defer deferClose(dstFile, dstPath)
+			defer deferFunc(dstFile, dstPath)
 
 			_, errCopy := io.Copy(dstFile, srcFile)
 			if errCopy != nil {
@@ -144,12 +163,10 @@ func preloadGames() {
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	requestedPath := filepath.Clean(r.URL.Path)
-
 	if requestedPath == "/" || requestedPath == "." || requestedPath == "" {
 		listFiles(w)
 		return
 	}
-
 	fullPath := filepath.Join(uploadsDir, requestedPath)
 	fileInfo, err := os.Stat(fullPath)
 	if err != nil {
@@ -162,13 +179,11 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
 	if fileInfo.IsDir() {
 		log.Printf("Attempt to access directory listing for non-root by %s: %s", r.RemoteAddr, r.URL.Path)
 		http.NotFound(w, r)
 		return
 	}
-
 	logDownload(r, requestedPath)
 	http.ServeFile(w, r, fullPath)
 }
@@ -180,7 +195,6 @@ func listFiles(w http.ResponseWriter) {
 		http.Error(w, "Could not list files due to server error reading directory.", http.StatusInternalServerError)
 		return
 	}
-
 	var filesView []FileViewData
 	for _, entry := range dirEntries {
 		if !entry.IsDir() {
@@ -197,11 +211,9 @@ func listFiles(w http.ResponseWriter) {
 			})
 		}
 	}
-
 	sort.Slice(filesView, func(i, j int) bool {
 		return strings.ToLower(filesView[i].Name) < strings.ToLower(filesView[j].Name)
 	})
-
 	data := struct{ Files []FileViewData }{Files: filesView}
 	err = templates.ExecuteTemplate(w, "list_files.html", data)
 	if err != nil {
@@ -220,9 +232,10 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		var responseMsg string
 		var responseErr bool
 		var httpStatusCode = http.StatusOK
-		if err := r.ParseMultipartForm(100 << 20); err != nil {
-			log.Printf("Error parsing multipart form (or file too large): %v", err)
-			responseMsg = "Error parsing form (file might be too large, max 100MB): " + err.Error()
+
+		if err := r.ParseMultipartForm(effectiveMaxUploadSizeBytes); err != nil {
+			log.Printf("Error parsing multipart form (or file too large, limit: %d bytes): %v", effectiveMaxUploadSizeBytes, err)
+			responseMsg = fmt.Sprintf("Error parsing form (file might be too large, max %d MB): %s", effectiveMaxUploadSizeBytes>>20, err.Error())
 			responseErr = true
 			httpStatusCode = http.StatusBadRequest
 		} else {
