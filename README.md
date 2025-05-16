@@ -3,11 +3,8 @@ Designed for straightforward LAN party sharing, this tool enables you to manage 
 
 ## Workflows
 
-### Main
-[![Binary GoLang](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml/badge.svg?branch=main)](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml)
-
-### Develop
-[![Binary GoLang](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml/badge.svg?branch=develop)](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml)
+[![Binary GoLang for main](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml/badge.svg?branch=main)](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml)
+[![Binary GoLang for develop](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml/badge.svg?branch=develop)](https://github.com/R2Unit/lanparty-fileserver/actions/workflows/build-golang-binary.yml)
 
 ## How to use it.
 
