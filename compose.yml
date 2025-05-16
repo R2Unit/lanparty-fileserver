@@ -1,6 +1,6 @@
 services:
   lanparty-fileserver:
-    image: ghcr.io/r2unit/lanparty-fileserver:dev-0.1.0
+    image: ghcr.io/r2unit/lanparty-fileserver:1
     container_name: lan-fileserver
     restart: unless-stopped 
     ports:

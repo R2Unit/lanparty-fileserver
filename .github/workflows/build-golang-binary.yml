@@ -1,0 +1,25 @@
+name: Binary GoLang
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.3'
+
+    - name: Build
+      run: go build -v ./cmd/lanparty-fileserver/
+
+    # - name: Test
+    #   run: go test -v ./cmd/lanparty-fileserver/
