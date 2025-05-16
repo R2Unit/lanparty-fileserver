@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Available Files - LAN File Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 800px; margin: auto; }
+        h1 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        a { color: #0275d8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .file-list { list-style-type: none; padding: 0; }
+        .file-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 10px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s ease;
+        }
+        .file-list li:last-child { border-bottom: none; }
+        .file-list li:hover { background-color: #f9f9f9; }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            margin-right: 10px; 
+            word-break: break-all; 
+        }
+        .filename { font-weight: bold; font-size: 1.1em; color: #333; }
+        .filesize { font-size: 0.9em; color: #666; margin-top: 4px; }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0; 
+        }
+
+        .download-button, .delete-button {
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.95em;
+            white-space: nowrap;
+            margin-left: 10px;
+        }
+        .download-button { background-color: #0275d8; }
+        .download-button:hover { background-color: #025aa5; }
+
+        .delete-button { background-color: #d9534f; }
+        .delete-button:hover { background-color: #c9302c; }
+
+        .no-files { text-align: center; padding: 20px; color: #777; }
+        .upload-link-container { margin-top: 30px; text-align: center; }
+        .upload-link-button {
+            background-color: #5cb85c;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        .upload-link-button:hover { background-color: #4cae4c; }
+        #statusMessage { margin-top: 15px; padding: 10px; border-radius: 4px; display: none; text-align: center;}
+        #statusMessage.success { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
+        #statusMessage.error { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+
+        footer {
+            text-align: center;
+            margin-top: 40px; 
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 0.85em; 
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Available Files</h1>
+        <div id="statusMessage"></div>
+
+        {{if .Files}}
+            <ul class="file-list">
+                {{range .Files}}
+                <li>
+                    <div class="file-info">
+                        <span class="filename">{{.Name}}</span>
+                        <span class="filesize">({{ .Size | formatBytes }})</span>
+                    </div>
+                    <div class="actions">
+                        <a href="{{.URL}}" class="download-button" download="{{.Name}}">Download</a>
+                        <button class="delete-button" data-filename="{{.Name}}">Delete</button>
+                    </div>
+                </li>
+                {{end}}
+            </ul>
+        {{else}}
+            <p class="no-files">No files available for download yet.</p>
+        {{end}}
+
+        <div class="upload-link-container">
+            <a href="/upload" class="upload-link-button">Upload More Files</a>
+        </div>
+
+        <footer>
+            <p>&copy; <span id="currentYear"></span> Copyright <a href="https://github.com/r2unit" id="credits" target="_blank">r2unit</a> - Share responsibly!</p>
+        </footer>
+    </div>
+
+<script>
+    document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const statusMessageDiv = document.getElementById('statusMessage');
+
+        document.querySelectorAll('.delete-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const currentButton = this; 
+                const filename = currentButton.dataset.filename;
+                const displayFilename = filename.replace(/[&<>"']/g, match => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[match]));
+
+                if (confirm(`Are you sure you want to delete "${displayFilename}"?`)) {
+                    if (confirm(`THIS ACTION CANNOT BE UNDONE.\nPermanently delete "${displayFilename}"?`)) {
+                        fetch('/delete', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ filename: filename })
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                return response.json().then(errData => {
+                                    throw new Error(errData.message || `Server error: ${response.status}`);
+                                });
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            statusMessageDiv.textContent = data.message;
+                            statusMessageDiv.className = data.error ? 'error' : 'success';
+                            statusMessageDiv.style.display = 'block';
+
+                            if (!data.error) {
+                                const listItem = currentButton.closest('li');
+                                if (listItem) {
+                                    listItem.remove();
+                                }
+                                
+                                const fileList = document.querySelector('.file-list');
+                                if (fileList && fileList.querySelectorAll('li').length === 0) {
+                                    fileList.remove(); 
+                                    const container = document.querySelector('.container'); 
+                                    let noFilesMessage = container.querySelector('.no-files');
+                                    if (!noFilesMessage) {
+                                        noFilesMessage = document.createElement('p');
+                                        noFilesMessage.className = 'no-files';
+                                        noFilesMessage.textContent = 'No files available for download yet.';
+                                        const uploadLinkContainer = container.querySelector('.upload-link-container');
+                                        if (uploadLinkContainer) {
+                                            container.insertBefore(noFilesMessage, uploadLinkContainer);
+                                        } else {
+                                            container.appendChild(noFilesMessage);
+                                        }
+                                    }
+                                    noFilesMessage.style.display = 'block';
+                                }
+                            }
+                            setTimeout(() => { statusMessageDiv.style.display = 'none'; }, 5000);
+                        })
+                        .catch(error => {
+                            console.error('Delete Error:', error);
+                            statusMessageDiv.textContent = 'Error: ' + error.message;
+                            statusMessageDiv.className = 'error';
+                            statusMessageDiv.style.display = 'block';
+                            setTimeout(() => { statusMessageDiv.style.display = 'none'; }, 5000);
+                        });
+                    }
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>
